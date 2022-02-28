@@ -1,0 +1,44 @@
+name: Update AWS Cloudformation stack
+
+on:
+  push:
+    paths:
+    - 'src/transform/**'
+    - 'src/load/**'
+
+jobs:
+  update-lambda-stack:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+
+    steps:
+      - name: checkout-repo
+        id: checkout-repo
+        uses: actions/checkout@v2
+      - name: zip package and update stack
+        run: |
+          cd src
+          cd transform
+          zip -r ../transformpackage.zip .   
+          cd ..
+          aws s3 cp transformpackage.zip  s3://team-1-bucket1/transformpackage.zip
+          cd load
+          zip -r ../loadpackage.zip .
+          cd ..
+          aws s3 cp loadpackage.zip  s3://team-1-bucket1/loadpackage.zip
+          export VERSIONID1=$(aws s3api list-object-versions --bucket team-1-bucket1 --prefix transformpackage.zip --query 'Versions[?IsLatest].[VersionId]' --output text)
+          echo $VERSIONID1
+          export VERSIONID2=$(aws s3api list-object-versions --bucket team-1-bucket1 --prefix loadpackage.zip --query 'Versions[?IsLatest].[VersionId]' --output text)
+          echo $VERSIONID2
+          aws cloudformation update-stack --stack-name team1-pipeline --template-url https://team-1-bucket1.s3.eu-west-1.amazonaws.com/sqslambdas.yaml --region eu-west-1 --parameters ParameterKey=DeploymentBucket,ParameterValue=team-1-bucket1 ParameterKey=DeploymentPackageKey,ParameterValue=transformpackage.zip ParameterKey=DeploymentPackageKey2,ParameterValue=loadpackage.zip ParameterKey=LandingBucket,ParameterValue=team1-trigger-bucket ParameterKey=DataBucket,ParameterValue=team1-data-bucket ParameterKey=VersionIDTransform,ParameterValue=$VERSIONID1 ParameterKey=VersionIDLoad,ParameterValue=$VERSIONID2 --capabilities CAPABILITY_IAM
+          
+          
+          
+          
+# aws cloudformation update-stack --stack-name team1-pipeline--template-url https://team-1-bucket1.s3.eu-west-1.amazonaws.com/team1-lambda-template.yaml --region eu-west-1 --parameters ParameterKey=DeploymentBucket,ParameterValue=team-1-bucket1 ParameterKey=DeploymentPackageKey,ParameterValue=transformpackage.zip ParameterKey=BucketName,ParameterValue=team1-trigger-bucket ParameterKey=VersionID,ParameterValue=$VERSIONID --capabilities CAPABILITY_IAM
+
+
+# aws cloudformation update-stack --stack-name team1-pipeline --template-url https://team-1-bucket1.s3.eu-west-1.amazonaws.com/sqslambdas.yaml --region eu-west-1 --parameters ParameterKey=DeploymentBucket,ParameterValue=team-1-bucket1 ParameterKey=DeploymentPackageKey,ParameterValue=transformpackage.zip ParameterKey=DeploymentPackageKey2,ParameterValue=loadpackage.zip ParameterKey=LandingBucket,ParameterValue=team1-trigger-bucket ParameterKey=DataBucket,ParameterValue=team1-data-bucket --profile learner-profile --capabilities CAPABILITY_IAM
